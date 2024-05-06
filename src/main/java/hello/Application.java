@@ -111,7 +111,7 @@ public class Application {
                 String result = _doPostRequest.apply("https://cassino-database-manager-production.up.railway.app/api/betfiery/double/save",
                         new ObjectMapper().valueToTree(recentRollData).toString());
                 logger.info("manager api response -> "+result);
-                Thread.sleep(22*1000);
+                Thread.sleep(18*1000);
             }
         }
     }
