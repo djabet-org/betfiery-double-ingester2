@@ -37,7 +37,8 @@ public class Application {
     BETFIERY_PROVIDER, "betfiery"
 );
 
-    public static void consumeServerSentEvent(String providerId) throws IOException, InterruptedException {
+    public static void consumeServerSentEvent(String providerId) {
+        try {
         String url = "https://live.tipminer.com/rounds/DOUBLE/%s/live";
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -48,6 +49,9 @@ public class Application {
 
         Stream<String> linesInResponse = client.send(request, HttpResponse.BodyHandlers.ofLines()).body();
         linesInResponse.filter( data -> data.contains("data")).map(data -> data.split(": ")[1]).forEach(data -> _save(data, providerId));
+        } catch (Exception ex) {
+            logger.error(providerId, ex);
+        }
     }
 
     private static void _save(String data, String providerId) {
@@ -94,7 +98,18 @@ public class Application {
     }
 
     public static void main(String[] args) throws InterruptedException, IOException {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
         consumeServerSentEvent(BETFIERY_PROVIDER);
-        // consumeServerSentEvent(SMASH_PROVIDER);
+            }
+        }).start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+        consumeServerSentEvent(SMASH_PROVIDER);
+            }
+        }).start();
+
     }
 }
