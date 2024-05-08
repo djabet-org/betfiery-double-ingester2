@@ -1,118 +1,88 @@
 package hello;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import org.apache.catalina.session.FileStore;
-import org.apache.catalina.session.PersistentManager;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.context.embedded.EmbeddedServletContainerCustomizer;
-import org.springframework.boot.context.embedded.tomcat.TomcatEmbeddedServletContainerFactory;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 
-import java.io.File;
+import java.beans.EventHandler;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.logging.Logger;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 
-
-@Configuration
-@ComponentScan
-@EnableAutoConfiguration
 public class Application {
     private final static Log logger = LogFactory.getLog(Application.class);
+    private static HttpClient client = HttpClient.newHttpClient();
 
-    public EmbeddedServletContainerCustomizer containerCustomizer() {
-        return factory -> {
-            TomcatEmbeddedServletContainerFactory containerFactory = (TomcatEmbeddedServletContainerFactory) factory;
-            containerFactory.setTomcatContextCustomizers(Arrays.asList(context -> {
-                final PersistentManager persistentManager = new PersistentManager();
-                final FileStore store = new FileStore();
+    public static void consumeServerSentEvent() throws IOException, InterruptedException {
+        String url = "https://live.tipminer.com/rounds/DOUBLE/644c2d334be055188b0e6237/live";
 
-                final String sessionDirectory = makeSessionDirectory();
-                logger.info("Writing sessions to " + sessionDirectory);
-                store.setDirectory(sessionDirectory);
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .GET()
+                .timeout(Duration.ofSeconds(120))
+                .build();
 
-                persistentManager.setStore(store);
-                context.setManager(persistentManager);
-            }));
-        };
+        Stream<String> linesInResponse = client.send(request, HttpResponse.BodyHandlers.ofLines()).body();
+        linesInResponse.filter( data -> data.contains("data")).map(data -> data.split(": ")[1]).forEach(Application::_save);
     }
 
-    private String makeSessionDirectory() {
-        final String cwd = System.getProperty("user.dir");
-        return cwd + File.separator + "sessions";
-    }
-
-    private static Supplier<RestTemplate> _restTemplate = RestTemplate::new;
-    private static Supplier<HttpHeaders> _headers = () -> {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)");
-        headers.add("Content-Type", "application/json");
-        return headers;
-    };
-    private static BiFunction<String, String, String> _doPostRequest = (url, postBody) -> {
-        System.out.println(postBody);
-        HttpEntity<String> requestEntity = new HttpEntity<String>(postBody, _headers.get());
-
-        return _restTemplate.get().postForEntity(
-                url, requestEntity, String.class).getBody();
-    };
-
-    private final static Function<JsonNode, Roll> _mapRoll = (rollNode) ->
-    Roll.with(
-                rollNode.get("color").asText().toLowerCase(),
-                rollNode.get("roll").asText().equalsIgnoreCase("wild") ? "0": rollNode.get("roll").asText(),
-                rollNode.get("create_time").asText(),
-                "betfiery",
-                rollNode.get("round_id").asInt()
-        );
-
-    private final static Function<String, JsonNode> _doGetRecentRollData = (response) ->
-    {
+    private static void _save(String data) {
         try {
-            return new ObjectMapper().readTree(response).get("data").get("list").get(0);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://cassino-database-manager-production.up.railway.app/api/betfiery/double/save"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(_mapRoll(data)))
+                    .timeout(Duration.ofSeconds(10))
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            logger.info(response.body());
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
-    };
+    }
+
+    private static String _mapRoll(String data) throws JsonProcessingException {
+        ObjectMapper mapper = new ObjectMapper();
+        ArrayNode jsonRoot = (ArrayNode) mapper.readTree(data);
+        JsonNode json = jsonRoot.get(0);
+        ObjectNode mapped = mapper.createObjectNode();
+        
+        mapped.put("roll", json.get("result").asInt());
+        mapped.put("color", _mapColor(json.get("result").asInt()));
+        mapped.put("platform", "betfiery");
+        mapped.put("created", json.get("date"));
+        mapped.put("total_red_money", 0);
+        mapped.put("total_black_money", 0);
+        mapped.put("total_white_money", 0);
+        System.out.println(mapped.toString());
+
+        return mapped.toString();
+    }
+
+    private static String _mapColor(int number) {
+        return number == 0 ? "white" : number < 8 ? "red": "black";
+    }
 
     public static void main(String[] args) throws InterruptedException, IOException {
-        int lastId = -1;
-        while (true) {
-            Roll recentRollData = _doPostRequest.andThen(_doGetRecentRollData).andThen(_mapRoll).apply("https://api.betfiery.com/game/double/list", "");
-            logger.info("roll -> "+recentRollData);
-            if (lastId != recentRollData.getId()) {
-                lastId = recentRollData.getId();
-                String result = _doPostRequest.apply("https://cassino-database-manager-production.up.railway.app/api/betfiery/double/save",
-                        new ObjectMapper().valueToTree(recentRollData).toString());
-                logger.info("manager api response -> "+result);
-                Thread.sleep(18*1000);
-            }
-        }
+        consumeServerSentEvent();
     }
 }
