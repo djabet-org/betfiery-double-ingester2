@@ -51,6 +51,7 @@ public class Application {
         linesInResponse.filter( data -> data.contains("data")).map(data -> data.split(": ")[1]).forEach(data -> _save(data, providerId));
         } catch (Throwable ex) {
             logger.error(providerId, ex);
+            consumeServerSentEvent(providerId);
         }
     }
 
