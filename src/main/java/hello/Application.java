@@ -99,18 +99,17 @@ public class Application {
     }
 
     public static void main(String[] args) {
-        // new Thread(new Runnable() {
-        //     @Override
-        //     public void run() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
         consumeServerSentEvent(BETFIERY_PROVIDER);
-        //     }
-        // }).start();
-        // new Thread(new Runnable() {
-        //     @Override
-        //     public void run() {
-        // consumeServerSentEvent(SMASH_PROVIDER);
-        //     }
-        // }).start();
-
+            }
+        }).start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+        consumeServerSentEvent(SMASH_PROVIDER);
+            }
+        }).start();
     }
 }
