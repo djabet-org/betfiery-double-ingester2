@@ -31,10 +31,12 @@ public class Application {
 
     private static String SMASH_PROVIDER = "644c2f2f95e6be2d44a2e277";
     private static String BETFIERY_PROVIDER = "644c2d334be055188b0e6237";
+    private static String CHILLBET_PROVIDER = "64d39889c0731c96defe6fe6";
 
     private static Map<String, String> providersMap = Map.of(
     SMASH_PROVIDER, "smash",
-    BETFIERY_PROVIDER, "betfiery"
+    BETFIERY_PROVIDER, "betfiery",
+    CHILLBET_PROVIDER, "chillbet"
 );
 
     public static void consumeServerSentEvent(String providerId) {
@@ -109,6 +111,12 @@ public class Application {
             @Override
             public void run() {
         consumeServerSentEvent(SMASH_PROVIDER);
+            }
+        }).start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+        consumeServerSentEvent(CHILLBET_PROVIDER);
             }
         }).start();
     }
