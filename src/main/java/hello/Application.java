@@ -49,7 +49,7 @@ public class Application {
 
         Stream<String> linesInResponse = client.send(request, HttpResponse.BodyHandlers.ofLines()).body();
         linesInResponse.filter( data -> data.contains("data")).map(data -> data.split(": ")[1]).forEach(data -> _save(data, providerId));
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
             logger.error(providerId, ex);
         }
     }
@@ -97,7 +97,7 @@ public class Application {
         return number == 0 ? "white" : number < 8 ? "red": "black";
     }
 
-    public static void main(String[] args) throws InterruptedException, IOException {
+    public static void main(String[] args) {
         new Thread(new Runnable() {
             @Override
             public void run() {
