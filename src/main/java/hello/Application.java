@@ -1,6 +1,5 @@
 package hello;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -24,6 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
+import java.util.Optional;
 
 public class Application {
     private final static Log logger = LogFactory.getLog(Application.class);
@@ -34,38 +34,38 @@ public class Application {
     private static String CHILLBET_PROVIDER = "64d39889c0731c96defe6fe6";
 
     private static Map<String, String> providersMap = Map.of(
-    SMASH_PROVIDER, "smash",
-    BETFIERY_PROVIDER, "betfiery",
-    CHILLBET_PROVIDER, "chillbet"
+    "smash",SMASH_PROVIDER, 
+    "betfiery",BETFIERY_PROVIDER, 
+   "chillbet",CHILLBET_PROVIDER 
 );
 
-    public static void consumeServerSentEvent(String providerId) {
+    public static int consumeServerSentEvent(String platform) {
         try {
         String url = "https://live.tipminer.com/rounds/DOUBLE/%s/live";
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(String.format(url, providerId)))
+                .uri(URI.create(String.format(url, providersMap.get(platform))))
                 .GET()
                 .timeout(Duration.ofSeconds(120))
                 .build();
 
         Stream<String> linesInResponse = client.send(request, HttpResponse.BodyHandlers.ofLines()).body();
-        linesInResponse.filter( data -> data.contains("data")).map(data -> data.split(": ")[1]).forEach(data -> _save(data, providerId));
+        linesInResponse.filter( data -> data.contains("data")).map(data -> _mapRoll(data)).forEach(data -> _save(data));
         } catch (Throwable ex) {
-            logger.error(providerId, ex);
-            consumeServerSentEvent(providerId);
+            logger.error(ex);
+            // consumeServerSentEvent(providerId);
         }
+        return 1;
     }
 
-    private static void _save(String data, String providerId) {
+    private static void _save(String data) {
         try {
             String url = "https://cassino-database-manager-production.up.railway.app/api/%s/double/save";
-            String platform = providersMap.get(providerId);
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(String.format(url, platform )))
+                    .uri(URI.create(String.format(url, System.getenv("platform") )))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(_mapRoll(data, platform)))
+                    .POST(HttpRequest.BodyPublishers.ofString(data))
                     .timeout(Duration.ofSeconds(10))
                     .build();
 
@@ -78,15 +78,17 @@ public class Application {
         }
     }
 
-    private static String _mapRoll(String data, String platform) throws JsonProcessingException {
+    private static String _mapRoll(String data) {
+        try {
+        String jsonData = data.split(": ")[1];
         ObjectMapper mapper = new ObjectMapper();
-        ArrayNode jsonRoot = (ArrayNode) mapper.readTree(data);
+        ArrayNode jsonRoot = (ArrayNode) mapper.readTree(jsonData);
         JsonNode json = jsonRoot.get(0);
         ObjectNode mapped = mapper.createObjectNode();
         
         mapped.put("roll", json.get("result").asInt());
         mapped.put("color", _mapColor(json.get("result").asInt()));
-        mapped.put("platform", platform);
+        mapped.put("platform", System.getenv("PLATFORM"));
         mapped.put("created", json.get("date"));
         mapped.put("total_red_money", 0);
         mapped.put("total_black_money", 0);
@@ -94,6 +96,11 @@ public class Application {
         logger.info(mapped);
 
         return mapped.toString();
+        }
+        catch (Exception ex){
+            logger.error(ex);
+            return null;
+        }
     }
 
     private static String _mapColor(int number) {
@@ -101,23 +108,8 @@ public class Application {
     }
 
     public static void main(String[] args) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-        consumeServerSentEvent(BETFIERY_PROVIDER);
-            }
-        }).start();
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-        consumeServerSentEvent(SMASH_PROVIDER);
-            }
-        }).start();
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-        consumeServerSentEvent(CHILLBET_PROVIDER);
-            }
-        }).start();
+        Optional.ofNullable(System.getenv("PLATFORM"))
+            .map(Application::consumeServerSentEvent)
+            .orElseThrow(() -> new RuntimeException("Please provide platform."));
     }
 }
