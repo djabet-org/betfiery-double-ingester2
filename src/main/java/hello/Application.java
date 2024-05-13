@@ -53,7 +53,7 @@ public class Application {
         linesInResponse.filter( data -> data.contains("data")).map(data -> _mapRoll(data)).forEach(data -> _save(data));
         } catch (Throwable ex) {
             logger.error(ex);
-            // consumeServerSentEvent(providerId);
+            consumeServerSentEvent(platform);
         }
         return 1;
     }
