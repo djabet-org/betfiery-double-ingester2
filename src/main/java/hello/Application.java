@@ -60,7 +60,7 @@ public class Application {
 
     private static void _save(String data) {
         try {
-            String url = "https://cassino-database-manager-production.up.railway.app/api/%s/double/save";
+            String url = "https://djabet-repository-api-production.up.railway.app/api/double/save";
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(String.format(url, System.getenv("platform") )))
@@ -89,7 +89,6 @@ public class Application {
         mapped.put("roll", json.get("result").asInt());
         mapped.put("color", _mapColor(json.get("result").asInt()));
         mapped.put("platform", System.getenv("PLATFORM"));
-        mapped.put("created", json.get("date"));
         mapped.put("total_red_money", 0);
         mapped.put("total_black_money", 0);
         mapped.put("total_white_money", 0);
