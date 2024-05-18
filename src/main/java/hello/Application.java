@@ -9,6 +9,7 @@ import org.apache.commons.logging.LogFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 
@@ -39,12 +40,12 @@ public class Application {
    "chillbet",CHILLBET_PROVIDER 
 );
 
-    public static int consumeServerSentEvent(String platform) {
+    public static int consumeServerSentEvent() {
         try {
         String url = "https://live.tipminer.com/rounds/DOUBLE/%s/live";
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(String.format(url, providersMap.get(platform))))
+                .uri(URI.create(String.format(url, System.getenv("PLATFORM_ID"))))
                 .GET()
                 .timeout(Duration.ofSeconds(120))
                 .build();
@@ -53,7 +54,7 @@ public class Application {
         linesInResponse.filter( data -> data.contains("data")).map(data -> _mapRoll(data)).forEach(data -> _save(data));
         } catch (Throwable ex) {
             logger.error(ex);
-            consumeServerSentEvent(platform);
+            consumeServerSentEvent();
         }
         return 1;
     }
@@ -63,7 +64,7 @@ public class Application {
             String url = "https://djabet-repository-api-production.up.railway.app/api/double/save";
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(String.format(url, System.getenv("platform") )))
+                    .uri(URI.create(String.format(url, System.getenv("PLATFORM") )))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(data))
                     .timeout(Duration.ofSeconds(10))
@@ -107,8 +108,13 @@ public class Application {
     }
 
     public static void main(String[] args) {
-        Optional.ofNullable(System.getenv("PLATFORM"))
-            .map(Application::consumeServerSentEvent)
-            .orElseThrow(() -> new RuntimeException("Please provide platform."));
+        String platform = System.getenv("PLATFORM");
+        String platformId = System.getenv("PLATFORM_ID");
+
+        if (!StringUtils.hasText(platform) || !StringUtils.hasText(platformId)) {
+            throw new RuntimeException("Please provide platform and platform id.");
+        }
+
+        consumeServerSentEvent();
     }
 }
