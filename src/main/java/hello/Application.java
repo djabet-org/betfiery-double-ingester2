@@ -117,21 +117,11 @@
                 throw new RuntimeException("Please provide platform and platform id.");
             }
 
-            Timer timer = new Timer ();
-            TimerTask hourlyTask = new TimerTask () {
-        @Override
-        public void run () {
             logger.info("creu");
             // your code here...
             if (linesInResponse != null) {
                 linesInResponse.close();
             }
             consumeServerSentEvent();
-        }
-    };
-
-    // schedule the task to run starting now and then every hour...
-    timer.schedule (hourlyTask, 0l, 1000*60*60);
-
         }
     }
